@@ -5,6 +5,7 @@ import { InputSection } from './components/InputSection';
 import { ReplyCard } from './components/ReplyCard';
 import { SettingsModal } from './components/SettingsModal';
 import { CreateVibeModal } from './components/CreateVibeModal';
+import { FloatingWidget } from './components/FloatingWidget';
 import { generateReplies, analyzeTextOnly } from './services/ai';
 import { getTranslation } from './constants/translations';
 
@@ -86,69 +87,74 @@ function App() {
   };
 
   return (
-    <Layout
-      onSettingsClick={() => setIsSettingsOpen(true)}
-      theme={theme}
-      onThemeToggle={toggleTheme}
-      curiosityMode={curiosityMode}
-      onCuriosityModeChange={handleCuriosityModeChange}
-      t={t}
-    >
-      <InputSection
-        onGenerate={handleGenerate}
-        onAnalyze={handleAnalyze}
-        loading={loading}
-        analysis={analysis}
-        t={t}
+    <>
+      <Layout
         onSettingsClick={() => setIsSettingsOpen(true)}
         theme={theme}
         onThemeToggle={toggleTheme}
         curiosityMode={curiosityMode}
         onCuriosityModeChange={handleCuriosityModeChange}
-        customVibes={customVibes}
-        onOpenCreateVibe={() => setIsCreateVibeOpen(true)}
-      />
-
-      {error && (
-        <div className="w-full max-w-3xl mx-auto p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200">
-          {error}
-        </div>
-      )}
-
-      {replies && (
-        <div className="grid md:grid-cols-3 gap-4 w-full max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
-          {replies.map((reply, index) => (
-            <ReplyCard
-              key={index}
-              tone={reply.tone}
-              emoji={reply.emoji}
-              content={reply.content}
-              delay={index * 0.1}
-              t={t}
-            />
-          ))}
-        </div>
-      )}
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        apiKey={apiKey}
-        onSave={handleSaveApiKey}
-        language={language}
-        onLanguageChange={handleLanguageChange}
-        curiosityMode={curiosityMode}
-        onCuriosityModeChange={handleCuriosityModeChange}
         t={t}
-      />
+      >
+        <InputSection
+          onGenerate={handleGenerate}
+          onAnalyze={handleAnalyze}
+          loading={loading}
+          analysis={analysis}
+          t={t}
+          onSettingsClick={() => setIsSettingsOpen(true)}
+          theme={theme}
+          onThemeToggle={toggleTheme}
+          curiosityMode={curiosityMode}
+          onCuriosityModeChange={handleCuriosityModeChange}
+          customVibes={customVibes}
+          onOpenCreateVibe={() => setIsCreateVibeOpen(true)}
+        />
 
-      <CreateVibeModal
-        isOpen={isCreateVibeOpen}
-        onClose={() => setIsCreateVibeOpen(false)}
-        onCreate={handleCreateVibe}
-        t={t}
-      />
-    </Layout>
+        {error && (
+          <div className="w-full max-w-3xl mx-auto p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200">
+            {error}
+          </div>
+        )}
+
+        {replies && (
+          <div className="grid md:grid-cols-3 gap-4 w-full max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {replies.map((reply, index) => (
+              <ReplyCard
+                key={index}
+                tone={reply.tone}
+                emoji={reply.emoji}
+                content={reply.content}
+                delay={index * 0.1}
+                t={t}
+              />
+            ))}
+          </div>
+        )}
+
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          apiKey={apiKey}
+          onSave={handleSaveApiKey}
+          language={language}
+          onLanguageChange={handleLanguageChange}
+          curiosityMode={curiosityMode}
+          onCuriosityModeChange={handleCuriosityModeChange}
+          t={t}
+        />
+
+        <CreateVibeModal
+          isOpen={isCreateVibeOpen}
+          onClose={() => setIsCreateVibeOpen(false)}
+          onCreate={handleCreateVibe}
+          t={t}
+        />
+      </Layout>
+
+      {/* Floating AI Widget - always on top, draggable */}
+      <FloatingWidget apiKey={apiKey} />
+    </>
   );
 }
 
