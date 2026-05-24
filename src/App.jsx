@@ -153,7 +153,7 @@ function App() {
       </Layout>
 
       {/* Floating AI Widget - always on top, draggable */}
-      <FloatingWidget apiKey={apiKey} />
+      <FloatingWidget apiKey={apiKey} theme={theme} />
     </>
   );
 }
