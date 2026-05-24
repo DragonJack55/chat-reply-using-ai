@@ -22,12 +22,16 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
     // PiP Window state
     const [pipWindow, setPipWindow] = useState(null);
 
-    // Draggable position coordinates
-    const [pos, setPos] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
-    
-    // Framer Motion values for clean drag reset
-    const dragX = useMotionValue(0);
-    const dragY = useMotionValue(0);
+    // Initial position coordinates
+    const initialX = window.innerWidth - 80;
+    const initialY = window.innerHeight - 80;
+
+    // Framer Motion values for screen placement relative to (left: 0, top: 0)
+    const posX = useMotionValue(initialX);
+    const posY = useMotionValue(initialY);
+
+    // Keep react state sync for placing the popup adjacent to bubble
+    const [pos, setPos] = useState({ x: initialX, y: initialY });
 
     const activeApiKey = localApiKey || externalApiKey;
     const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
@@ -53,21 +57,22 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
         { value: 'greeting', label: 'Greeting', emoji: '🤝' }
     ];
 
-    // Clamping utility
-    const clampPos = (x, y) => {
-        const nextX = Math.min(Math.max(x, 0), window.innerWidth - 56);
-        const nextY = Math.min(Math.max(y, 0), window.innerHeight - 56);
-        return { x: nextX, y: nextY };
-    };
+    // Clamping helper
+    const clampX = (x) => Math.min(Math.max(x, 0), window.innerWidth - 56);
+    const clampY = (y) => Math.min(Math.max(y, 0), window.innerHeight - 56);
 
     // Keep bubble in bounds when window resizing
     useEffect(() => {
         const handleResize = () => {
-            setPos(prev => clampPos(prev.x, prev.y));
+            const nextX = clampX(posX.get());
+            const nextY = clampY(posY.get());
+            posX.set(nextX);
+            posY.set(nextY);
+            setPos({ x: nextX, y: nextY });
         };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    }, [posX, posY]);
 
     // Sync external API key changes
     useEffect(() => {
@@ -117,20 +122,25 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
     const bubbleRef = useRef(null);
     const popupRef = useRef(null);
 
-    // --- Drag End Handler ---
-    const handleDragEnd = (event, info) => {
-        setPos(prev => {
-            // Apply delta offset of the drag to the state coordinates
-            return clampPos(prev.x + info.offset.x, prev.y + info.offset.y);
+    // --- Drag Event Handler ---
+    const handleDrag = () => {
+        // Update popup placement coordinates reactively during dragging
+        setPos({
+            x: posX.get(),
+            y: posY.get()
         });
-        
-        // Reset motion values to 0 so Framer Motion translation resets,
-        // letting the state update take over placement.
-        dragX.set(0);
-        dragY.set(0);
     };
 
-    const handleBubbleClick = (e) => {
+    const handleDragEnd = () => {
+        // Enforce clamping boundaries when dragging completes
+        const nextX = clampX(posX.get());
+        const nextY = clampY(posY.get());
+        posX.set(nextX);
+        posY.set(nextY);
+        setPos({ x: nextX, y: nextY });
+    };
+
+    const handleBubbleClick = () => {
         // If Desktop PiP is active, clicking the bubble will close/reclaim it
         if (pipWindow) {
             pipWindow.close();
@@ -411,63 +421,61 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
 
     return (
         <>
-            {/* Draggable Floating Web Bubble using Framer Motion */}
+            {/* Unified Draggable Floating Web Bubble using Framer Motion */}
             <motion.div
                 ref={bubbleRef}
                 drag
                 dragMomentum={false}
                 dragElastic={0}
                 dragConstraints={{
-                    left: -pos.x,
-                    right: window.innerWidth - 56 - pos.x,
-                    top: -pos.y,
-                    bottom: window.innerHeight - 56 - pos.y
+                    left: 0,
+                    right: window.innerWidth - 56,
+                    top: 0,
+                    bottom: window.innerHeight - 56
                 }}
+                onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
-                x={dragX}
-                y={dragY}
+                x={posX}
+                y={posY}
+                onClick={handleBubbleClick}
+                animate={{ 
+                    scale: isOpen || pipWindow ? 0.9 : 1,
+                    backgroundColor: pipWindow ? 'rgba(124,58,237,0.8)' : 'rgba(79,70,229,0.9)'
+                }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
                 style={{
                     position: 'fixed',
-                    left: pos.x,
-                    top: pos.y,
+                    left: 0,
+                    top: 0,
                     zIndex: 9999,
                     touchAction: 'none'
                 }}
+                className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 shadow-xl shadow-purple-900/50 flex items-center justify-center border border-white/10 cursor-grab active:cursor-grabbing select-none"
             >
-                <motion.div
-                    onClick={handleBubbleClick}
-                    animate={{ 
-                        scale: isOpen || pipWindow ? 0.9 : 1,
-                        backgroundColor: pipWindow ? 'rgba(124,58,237,0.8)' : 'rgba(79,70,229,0.9)'
-                    }}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 shadow-xl shadow-purple-900/50 flex items-center justify-center relative border border-white/10 cursor-grab active:cursor-grabbing select-none"
-                >
-                    {pipWindow ? (
-                        <div className="flex flex-col items-center justify-center">
-                            <Laptop size={18} className="text-white mb-0.5" />
-                            <span className="text-[8px] text-purple-200 font-bold uppercase tracking-tight scale-90">LIVE</span>
-                        </div>
-                    ) : (
-                        <>
-                            {!isOpen && (
-                                <span className="absolute inset-0 rounded-full animate-ping bg-purple-500/30 pointer-events-none" />
+                {pipWindow ? (
+                    <div className="flex flex-col items-center justify-center pointer-events-none">
+                        <Laptop size={18} className="text-white mb-0.5" />
+                        <span className="text-[8px] text-purple-200 font-bold uppercase tracking-tight scale-90">LIVE</span>
+                    </div>
+                ) : (
+                    <div className="pointer-events-none flex items-center justify-center">
+                        {!isOpen && (
+                            <span className="absolute inset-0 rounded-full animate-ping bg-purple-500/30 pointer-events-none" />
+                        )}
+                        <AnimatePresence mode="wait">
+                            {isOpen ? (
+                                <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                                    <X size={22} className="text-white" />
+                                </motion.div>
+                            ) : (
+                                <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
+                                    <Sparkles size={22} className="text-white" />
+                                </motion.div>
                             )}
-                            <AnimatePresence mode="wait">
-                                {isOpen ? (
-                                    <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.15 }}>
-                                        <X size={22} className="text-white" />
-                                    </motion.div>
-                                ) : (
-                                    <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.15 }}>
-                                        <Sparkles size={22} className="text-white" />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </>
-                    )}
-                </motion.div>
+                        </AnimatePresence>
+                    </div>
+                )}
             </motion.div>
 
             {/* Render In-App Floating Panel (Normal Mode) */}
