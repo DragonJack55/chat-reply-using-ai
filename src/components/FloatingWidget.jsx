@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, X, Copy, Check, Loader2, Settings, Clipboard, Key, ExternalLink, Laptop } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 import { generateReplies } from '../services/ai';
 
 export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
@@ -22,13 +22,12 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
     // PiP Window state
     const [pipWindow, setPipWindow] = useState(null);
 
-    // Dragging state (for in-app bubble)
+    // Draggable position coordinates
     const [pos, setPos] = useState({ x: window.innerWidth - 80, y: window.innerHeight - 80 });
-    const [dragging, setDragging] = useState(false);
-    const dragOffset = useRef({ x: 0, y: 0 });
-    const bubbleRef = useRef(null);
-    const popupRef = useRef(null);
-    const hasDragged = useRef(false);
+    
+    // Framer Motion values for clean drag reset
+    const dragX = useMotionValue(0);
+    const dragY = useMotionValue(0);
 
     const activeApiKey = localApiKey || externalApiKey;
     const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
@@ -54,14 +53,17 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
         { value: 'greeting', label: 'Greeting', emoji: '🤝' }
     ];
 
+    // Clamping utility
+    const clampPos = (x, y) => {
+        const nextX = Math.min(Math.max(x, 0), window.innerWidth - 56);
+        const nextY = Math.min(Math.max(y, 0), window.innerHeight - 56);
+        return { x: nextX, y: nextY };
+    };
+
     // Keep bubble in bounds when window resizing
     useEffect(() => {
         const handleResize = () => {
-            setPos(prev => {
-                const nextX = Math.min(Math.max(prev.x, 0), window.innerWidth - 56);
-                const nextY = Math.min(Math.max(prev.y, 0), window.innerHeight - 56);
-                return { x: nextX, y: nextY };
-            });
+            setPos(prev => clampPos(prev.x, prev.y));
         };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
@@ -111,61 +113,24 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
         };
     }, [pipWindow]);
 
-    // --- Drag Logic (for Web Bubble) ---
-    const onMouseDown = (e) => {
-        hasDragged.current = false;
-        setDragging(true);
-        dragOffset.current = {
-            x: e.clientX - pos.x,
-            y: e.clientY - pos.y,
-        };
-        e.preventDefault();
-    };
+    // References
+    const bubbleRef = useRef(null);
+    const popupRef = useRef(null);
 
-    const onTouchStart = (e) => {
-        hasDragged.current = false;
-        setDragging(true);
-        const touch = e.touches[0];
-        dragOffset.current = {
-            x: touch.clientX - pos.x,
-            y: touch.clientY - pos.y,
-        };
-    };
-
-    useEffect(() => {
-        const onMouseMove = (e) => {
-            if (!dragging) return;
-            hasDragged.current = true;
-            const newX = Math.min(Math.max(e.clientX - dragOffset.current.x, 0), window.innerWidth - 56);
-            const newY = Math.min(Math.max(e.clientY - dragOffset.current.y, 0), window.innerHeight - 56);
-            setPos({ x: newX, y: newY });
-        };
-        const onTouchMove = (e) => {
-            if (!dragging) return;
-            hasDragged.current = true;
-            const touch = e.touches[0];
-            const newX = Math.min(Math.max(touch.clientX - dragOffset.current.x, 0), window.innerWidth - 56);
-            const newY = Math.min(Math.max(touch.clientY - dragOffset.current.y, 0), window.innerHeight - 56);
-            setPos({ x: newX, y: newY });
-        };
-        const onMouseUp = () => setDragging(false);
-        const onTouchEnd = () => setDragging(false);
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        window.addEventListener('touchmove', onTouchMove, { passive: false });
-        window.addEventListener('touchend', onTouchEnd);
-        return () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-            window.removeEventListener('touchmove', onTouchMove);
-            window.removeEventListener('touchend', onTouchEnd);
-        };
-    }, [dragging]);
-
-    const handleBubbleClick = () => {
-        if (hasDragged.current) return;
+    // --- Drag End Handler ---
+    const handleDragEnd = (event, info) => {
+        setPos(prev => {
+            // Apply delta offset of the drag to the state coordinates
+            return clampPos(prev.x + info.offset.x, prev.y + info.offset.y);
+        });
         
+        // Reset motion values to 0 so Framer Motion translation resets,
+        // letting the state update take over placement.
+        dragX.set(0);
+        dragY.set(0);
+    };
+
+    const handleBubbleClick = (e) => {
         // If Desktop PiP is active, clicking the bubble will close/reclaim it
         if (pipWindow) {
             pipWindow.close();
@@ -278,7 +243,7 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
     const popupAbove = pos.y > window.innerHeight / 2;
     const popupLeft = pos.x > window.innerWidth / 2;
 
-    const renderChatBody = (isDesktopMode = false) => (
+    const renderChatBody = () => (
         <>
             {/* Selectors Panel (Gender, Stage) */}
             <div className="px-4 pt-3 flex gap-2 border-b border-white/5 pb-2">
@@ -446,37 +411,44 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
 
     return (
         <>
-            {/* Floating Web Bubble */}
-            <div
+            {/* Draggable Floating Web Bubble using Framer Motion */}
+            <motion.div
                 ref={bubbleRef}
+                drag
+                dragMomentum={false}
+                dragElastic={0}
+                dragConstraints={{
+                    left: -pos.x,
+                    right: window.innerWidth - 56 - pos.x,
+                    top: -pos.y,
+                    bottom: window.innerHeight - 56 - pos.y
+                }}
+                onDragEnd={handleDragEnd}
+                x={dragX}
+                y={dragY}
                 style={{
                     position: 'fixed',
                     left: pos.x,
                     top: pos.y,
                     zIndex: 9999,
-                    cursor: dragging ? 'grabbing' : 'grab',
-                    touchAction: 'none',
-                    userSelect: 'none',
+                    touchAction: 'none'
                 }}
-                onMouseDown={onMouseDown}
-                onTouchStart={onTouchStart}
-                onClick={handleBubbleClick}
             >
                 <motion.div
+                    onClick={handleBubbleClick}
                     animate={{ 
                         scale: isOpen || pipWindow ? 0.9 : 1,
                         backgroundColor: pipWindow ? 'rgba(124,58,237,0.8)' : 'rgba(79,70,229,0.9)'
                     }}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
-                    className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 shadow-xl shadow-purple-900/50 flex items-center justify-center relative border border-white/10"
+                    className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 shadow-xl shadow-purple-900/50 flex items-center justify-center relative border border-white/10 cursor-grab active:cursor-grabbing select-none"
                 >
                     {pipWindow ? (
-                        // If desktop float is active, bubble acts as recall/close button
-                        <motion.div key="pip-active" initial={{ scale: 0 }} animate={{ scale: 1 }} className="flex flex-col items-center justify-center">
+                        <div className="flex flex-col items-center justify-center">
                             <Laptop size={18} className="text-white mb-0.5" />
                             <span className="text-[8px] text-purple-200 font-bold uppercase tracking-tight scale-90">LIVE</span>
-                        </motion.div>
+                        </div>
                     ) : (
                         <>
                             {!isOpen && (
@@ -496,7 +468,7 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
                         </>
                     )}
                 </motion.div>
-            </div>
+            </motion.div>
 
             {/* Render In-App Floating Panel (Normal Mode) */}
             <AnimatePresence>
@@ -548,7 +520,7 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
                                 </div>
                             </div>
 
-                            {showSettings ? renderSettingsBody() : renderChatBody(false)}
+                            {showSettings ? renderSettingsBody() : renderChatBody()}
                         </div>
                     </motion.div>
                 )}
@@ -584,7 +556,7 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
 
                     {/* PiP Body */}
                     <div className="flex-1 flex flex-col justify-start">
-                        {showSettings ? renderSettingsBody() : renderChatBody(true)}
+                        {showSettings ? renderSettingsBody() : renderChatBody()}
                     </div>
                 </div>,
                 pipWindow.document.body
