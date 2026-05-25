@@ -281,6 +281,42 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
     const popupAbove = pos.y > window.innerHeight / 2;
     const popupLeft = pos.x > window.innerWidth / 2;
 
+    const renderFloatBanner = () => {
+        if (isPipSupported) {
+            return (
+                <div className="mx-4 mt-3 p-2.5 rounded-xl bg-purple-600/10 border border-purple-500/20 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-300">
+                            <Laptop size={16} />
+                        </div>
+                        <div className="text-left animate-pulse">
+                            <span className="text-xs font-bold text-purple-200 block leading-tight">Float on Desktop</span>
+                            <span className="text-[10px] text-purple-400/90 block leading-tight">Keep widget always-on-top</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={togglePip}
+                        className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-all shadow-md shadow-purple-900/30 flex items-center gap-1 active:scale-95"
+                    >
+                        Enable <ExternalLink size={12} />
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="mx-4 mt-3 p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-slate-500">
+                    <Laptop size={16} />
+                </div>
+                <div className="text-left">
+                    <span className="text-xs font-bold text-slate-400 block leading-tight">Float on Desktop</span>
+                    <span className="text-[10px] text-slate-500 block leading-tight">Use Chrome or Edge for always-on-top</span>
+                </div>
+            </div>
+        );
+    };
+
     const renderChatBody = () => (
         <>
             {/* Selectors Panel (Gender, Stage) */}
@@ -539,6 +575,9 @@ export const FloatingWidget = ({ apiKey: externalApiKey, theme }) => {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Desktop Float Banner */}
+                            {!showSettings && renderFloatBanner()}
 
                             {showSettings ? renderSettingsBody() : renderChatBody()}
                         </div>
